@@ -1,0 +1,34 @@
+# Local stack: backend + Postgres (mirrors the Supabase production setup).
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fisherman
+      POSTGRES_PASSWORD: fisherman
+      POSTGRES_DB: fisherman_os
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fisherman"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://fisherman:fisherman@db:5432/fisherman_os
+      WHATSAPP_PROVIDER: console
+      WEATHER_PROVIDER: synthetic
+      ENABLE_SCHEDULER: "true"
+      ADMIN_API_KEY: local-dev-key
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:

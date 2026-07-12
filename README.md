@@ -25,9 +25,34 @@ The result:
 
 | Deliverable | Description | File Link |
 |:---|:---|:---|
+| 🤖 **Phase 1 Backend (Goa MVP)** | Working WhatsApp-bot backend: 3:30 AM forecast push, market prices, SOS flow, onboarding, Konkani/Hindi/Marathi localization, 78-test suite | [`backend/`](./backend/) |
 | 🌐 **Interactive Pitch Deck** | Stunning 11-slide responsive landing page with interactive WhatsApp chat simulation & financial models | [`index.html`](./index.html) |
 | 📊 **Validation Report** | Complete 27/30 scored business validation, pressure tests, competitor analysis, & data network effect moat | [`idea_validation_report.md`](./idea_validation_report.md) |
 | 🗺️ **Execution Plan & MVP Roadmap** | Detailed 30-month 4-phase blueprint, system architecture, WhatsApp bot specification, & budget | [`execution_plan.md`](./execution_plan.md) |
+
+---
+
+## 🚧 Phase 1 (Goa MVP) — Implemented
+
+The [`backend/`](./backend/) directory contains the working Phase 1 system from the
+[execution plan](./execution_plan.md): a FastAPI + PostgreSQL backend behind a
+Gupshup WhatsApp webhook, with:
+
+- **Feature 1 — Morning Forecast:** INCOIS Ocean State Forecast pipeline (with
+  OpenWeatherMap and synthetic fallbacks), 🟢🟡🔴 sea-safety classification, and a
+  3:30 AM IST auto-push per village.
+- **Feature 2 — Market Prices:** field-agent price entry (admin API + WhatsApp
+  `PRICE` command), FMPIS ingestion hook, 5 AM digest, and the "💡 Margao paying
+  29% more" best-market tip.
+- **Feature 3 — SOS:** always-on distress flow with Coast Guard 1554, emergency
+  contact alerts, live location relay every 5 minutes, and CANCEL stand-down.
+- **Onboarding:** send "Hi" → language → name → village → boat type → first
+  forecast immediately. 41 South Goa villages and 5 landing centers seeded.
+- **Localization:** English, Konkani (Romi), Hindi, Marathi.
+- **Ops:** KPI metrics endpoint (registered vs 500 target, DAU vs 60% target,
+  SOS counts), broadcast tool, Docker/Compose, CI.
+
+See [`backend/README.md`](./backend/README.md) for setup and the deploy checklist.
 
 ---
 
