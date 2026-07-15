@@ -1,4 +1,10 @@
-const API_URL = 'http://localhost:8000';
+// Determine backend API URL (supports query param ?api_url=... or falls back to localhost in dev / origin in prod)
+const urlParams = new URLSearchParams(window.location.search);
+const API_URL = urlParams.get('api_url') || (
+    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:8000'
+        : window.location.origin
+);
 const MY_PHONE = '919822000001';
 
 const chatArea = document.getElementById('chatArea');

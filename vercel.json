@@ -1,0 +1,47 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "backend/app/main.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "index.css",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "script.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "whatsapp-simulator/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/health",
+      "dest": "backend/app/main.py"
+    },
+    {
+      "src": "/webhook/(.*)",
+      "dest": "backend/app/main.py"
+    },
+    {
+      "src": "/admin/(.*)",
+      "dest": "backend/app/main.py"
+    },
+    {
+      "src": "/whatsapp-simulator/(.*)",
+      "dest": "/whatsapp-simulator/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ]
+}
