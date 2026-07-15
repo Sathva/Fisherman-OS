@@ -285,4 +285,129 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    // --- Interactive WhatsApp Chatbot Simulation ---
+    const waChat = document.getElementById('wa-chat');
+    const waInput = document.getElementById('wa-message-input');
+    const waSendBtn = document.getElementById('wa-send-btn');
+
+    // Dynamic backend URL check (query params -> localhost -> origin)
+    const waParams = new URLSearchParams(window.location.search);
+    const WA_API_URL = waParams.get('api_url') || (
+        window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:8000'
+            : window.location.origin
+    );
+    const WA_MY_PHONE = '919822000001';
+    let waLastMessageCount = 0;
+
+    function getFormattedTime() {
+        const now = new Date();
+        return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function appendInteractiveMessage(text, type) {
+        const bubble = document.createElement('div');
+        bubble.className = `wa-message wa-${type === 'sent' ? 'outgoing' : 'incoming'} visible`;
+        
+        const innerBubble = document.createElement('div');
+        innerBubble.className = 'wa-bubble';
+        
+        if (type === 'received') {
+            const sender = document.createElement('div');
+            sender.className = 'wa-sender';
+            sender.textContent = 'Fisherman OS 🌊';
+            innerBubble.appendChild(sender);
+        }
+        
+        const textDiv = document.createElement('div');
+        textDiv.className = 'wa-text';
+        textDiv.innerHTML = text.replace(/\n/g, '<br>');
+        innerBubble.appendChild(textDiv);
+        
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'wa-time';
+        timeDiv.textContent = getFormattedTime() + (type === 'sent' ? ' ✓✓' : '');
+        innerBubble.appendChild(timeDiv);
+        
+        bubble.appendChild(innerBubble);
+        if (waChat) {
+            waChat.appendChild(bubble);
+            waChat.scrollTop = waChat.scrollHeight;
+        }
+    }
+
+    async function sendWaMessage() {
+        const text = waInput.value.trim();
+        if (!text) return;
+        
+        appendInteractiveMessage(text, 'sent');
+        waInput.value = '';
+        
+        const payload = {
+            type: "message",
+            payload: {
+                id: `msg-${Date.now()}`,
+                type: "text",
+                source: WA_MY_PHONE,
+                sender: {
+                    phone: WA_MY_PHONE,
+                    name: "Fisherman Simulator"
+                },
+                payload: {
+                    text: text
+                }
+            }
+        };
+        
+        try {
+            await fetch(`${WA_API_URL}/webhook/gupshup`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+        } catch (err) {
+            console.error("Failed to send message:", err);
+        }
+    }
+
+    async function pollWaMessages() {
+        try {
+            const response = await fetch(`${WA_API_URL}/webhook/gupshup/simulator/messages`);
+            if (!response.ok) return;
+            
+            const messages = await response.json();
+            
+            if (messages.length > waLastMessageCount) {
+                if (waLastMessageCount === 0) {
+                    // Initialize count to ignore past session history
+                    waLastMessageCount = messages.length;
+                    return;
+                }
+                for (let i = waLastMessageCount; i < messages.length; i++) {
+                    const msg = messages[i];
+                    if (msg.phone === WA_MY_PHONE) {
+                        appendInteractiveMessage(msg.text, 'received');
+                    }
+                }
+                waLastMessageCount = messages.length;
+            }
+        } catch (err) {
+            // Ignore offline/disconnected backend errors silently
+        }
+    }
+
+    if (waSendBtn && waInput) {
+        waSendBtn.addEventListener('click', sendWaMessage);
+        waInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendWaMessage();
+            }
+        });
+        
+        // Start polling for new replies every 1.5 seconds
+        setInterval(pollWaMessages, 1500);
+    }
 });

@@ -724,9 +724,65 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 460px;
+    height: 400px;
     overflow-y: auto;
 }
+
+/* Interactive WhatsApp Mockup Inputs */
+.wa-input-area {
+    display: flex;
+    padding: 10px;
+    background-color: #1f2c34;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.wa-input-container {
+    flex: 1;
+    background-color: #2a3942;
+    border-radius: 20px;
+    padding: 6px 12px;
+}
+
+.wa-input-container input {
+    width: 100%;
+    border: none;
+    outline: none;
+    font-size: 0.85rem;
+    color: #e9edef;
+    background: transparent;
+    font-family: inherit;
+}
+
+.wa-input-container input::placeholder {
+    color: rgba(233, 237, 239, 0.5);
+}
+
+.wa-send-btn {
+    background-color: var(--accent-teal);
+    color: #0a0f1a;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    transition: transform var(--transition-fast), background-color var(--transition-fast);
+}
+
+.wa-send-btn:hover {
+    background-color: var(--accent-green);
+    transform: scale(1.05);
+}
+
+.wa-send-btn svg {
+    margin-left: 2px; /* visually center paper plane */
+}
+
 
 .wa-message {
     max-width: 90%;
