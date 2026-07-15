@@ -57,4 +57,12 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    import os
+    if "VERCEL" in os.environ:
+        # Avoid running background scheduler threads in serverless execution context
+        settings.enable_scheduler = False
+        # Redirect default SQLite location to /tmp to prevent read-only filesystem errors
+        if settings.database_url == "sqlite+aiosqlite:///./fisherman_os.db":
+            settings.database_url = "sqlite+aiosqlite:////tmp/fisherman_os.db"
+    return settings

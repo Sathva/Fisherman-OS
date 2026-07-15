@@ -5,7 +5,12 @@ Run locally:
 """
 
 import logging
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# Add backend directory to sys.path to support Vercel serverless imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from fastapi import FastAPI
 
