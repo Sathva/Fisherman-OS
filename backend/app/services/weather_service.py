@@ -112,18 +112,8 @@ async def get_or_create_forecast(
 
 
 async def refresh_forecast(session: AsyncSession, village: Village, day: date) -> WeatherForecast:
-    """Force re-fetch (used by the pre-push scheduler run so 3:30 AM data is fresh)."""
-    existing = (
-        await session.execute(
-            select(WeatherForecast).where(
-                WeatherForecast.village_id == village.id,
-                WeatherForecast.forecast_date == day,
-            )
-        )
-    ).scalar_one_or_none()
-    if existing is not None:
-        await session.delete(existing)
-        await session.commit()
+    """Fetch a fresh forecast (used by the 3:30 AM scheduler push). Forecasts
+    are never persisted, so a refresh is simply a new fetch."""
     forecast, _ = await get_or_create_forecast(session, village, day)
     return forecast
 

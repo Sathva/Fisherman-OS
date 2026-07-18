@@ -60,45 +60,46 @@ def test_incois_rejects_garbage():
         )
 
 
-async def test_forecast_cached_per_village_day(db):
+async def test_forecast_is_fetched_fresh_and_not_persisted(db):
     village = (
         await db.execute(select(Village).where(Village.name == "Betul"))
     ).scalar_one()
     day = date(2026, 7, 8)
 
-    first = await weather_service.get_or_create_forecast(db, village, day)
-    second = await weather_service.get_or_create_forecast(db, village, day)
-    assert first.id == second.id  # cached, not re-fetched
+    first, _ = await weather_service.get_or_create_forecast(db, village, day)
+    second, _ = await weather_service.get_or_create_forecast(db, village, day)
+    # Synthetic provider is deterministic, so both fetches agree.
+    assert first.wind_speed_kmh == second.wind_speed_kmh
+    assert first.wave_height_m == second.wave_height_m
 
     count = (
         await db.execute(select(func.count(WeatherForecast.id)))
     ).scalar_one()
-    assert count == 1
+    assert count == 0  # transient objects only — nothing persisted
 
 
 async def test_forecast_has_safety_and_hourly_strip(db):
     village = (
         await db.execute(select(Village).where(Village.name == "Betul"))
     ).scalar_one()
-    forecast = await weather_service.get_or_create_forecast(db, village, date(2026, 7, 8))
+    forecast, _ = await weather_service.get_or_create_forecast(db, village, date(2026, 7, 8))
 
     assert forecast.safety_level in list(SafetyLevel)
     assert len(forecast.hourly_level_list()) == 6
     assert forecast.source == WeatherSource.SYNTHETIC
 
 
-async def test_refresh_forecast_replaces_row(db):
+async def test_refresh_forecast_returns_fresh_forecast(db):
     village = (
         await db.execute(select(Village).where(Village.name == "Betul"))
     ).scalar_one()
     day = date(2026, 7, 8)
-    first = await weather_service.get_or_create_forecast(db, village, day)
+    first, _ = await weather_service.get_or_create_forecast(db, village, day)
     refreshed = await weather_service.refresh_forecast(db, village, day)
 
-    # Still exactly one row for (village, day); the refreshed row carries the
-    # same deterministic synthetic data but was re-issued.
-    assert refreshed.issued_at >= first.issued_at
+    assert refreshed.wind_speed_kmh == first.wind_speed_kmh
+    assert refreshed.safety_level in list(SafetyLevel)
     count = (
         await db.execute(select(func.count(WeatherForecast.id)))
     ).scalar_one()
-    assert count == 1
+    assert count == 0

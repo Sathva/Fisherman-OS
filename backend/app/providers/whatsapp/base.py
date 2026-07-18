@@ -21,6 +21,16 @@ class WhatsAppProvider(abc.ABC):
     async def send_text(self, to_phone: str, text: str) -> SendResult:
         """Send a plain text message to `to_phone` (digits-only E.164)."""
 
+    async def send_quick_replies(
+        self, to_phone: str, text: str, options: list[str]
+    ) -> SendResult:
+        """Send `text` with tappable quick-reply buttons (max 3, titles ≤ 20
+        chars — WhatsApp limits). Tapping a button sends its title back as an
+        inbound message. Providers without button support fall back to
+        appending the options as text."""
+        suffix = "\n\n" + "\n".join(f"👉 {option}" for option in options)
+        return await self.send_text(to_phone, text + suffix)
+
 
 @dataclass
 class InboundMessage:

@@ -18,22 +18,39 @@ function formatTime() {
     return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function appendMessage(text, type) {
+function appendMessage(text, type, buttons) {
     const bubble = document.createElement('div');
     bubble.className = `message-bubble ${type}`;
-    
+
     // Add text
     const textSpan = document.createElement('span');
     textSpan.textContent = text;
     bubble.appendChild(textSpan);
-    
+
     // Add time
     const timeSpan = document.createElement('span');
     timeSpan.className = 'message-time';
     timeSpan.textContent = formatTime();
     bubble.appendChild(timeSpan);
-    
+
     chatArea.appendChild(bubble);
+
+    // WhatsApp-style quick-reply buttons — tapping sends the title back
+    if (buttons && buttons.length) {
+        const row = document.createElement('div');
+        row.className = 'quick-replies';
+        buttons.forEach((title) => {
+            const btn = document.createElement('button');
+            btn.className = 'quick-reply-btn';
+            btn.textContent = title;
+            btn.addEventListener('click', () => {
+                row.remove();
+                sendText(title);
+            });
+            row.appendChild(btn);
+        });
+        chatArea.appendChild(row);
+    }
     scrollToBottom();
 }
 
@@ -44,11 +61,14 @@ function scrollToBottom() {
 async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text) return;
-    
+    messageInput.value = '';
+    await sendText(text);
+}
+
+async function sendText(text) {
     // Optimistically show user's message
     appendMessage(text, 'sent');
-    messageInput.value = '';
-    
+
     // Send to API
     const payload = {
         type: "message",
@@ -94,7 +114,7 @@ async function pollMessages() {
                 const msg = messages[i];
                 // Only show messages sent back to our phone
                 if (msg.phone === MY_PHONE) {
-                    appendMessage(msg.text, 'received');
+                    appendMessage(msg.text, 'received', msg.buttons);
                 }
             }
             lastMessageCount = messages.length;

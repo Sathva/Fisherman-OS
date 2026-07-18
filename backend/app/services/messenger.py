@@ -46,8 +46,14 @@ async def send_message(
     text: str,
     user_id: int | None = None,
     message_type: MessageType = MessageType.GENERIC,
+    options: list[str] | None = None,
 ) -> SendResult:
-    result = await get_provider().send_text(phone, text)
+    """Send `text`; pass `options` to attach tappable quick-reply buttons."""
+    provider = get_provider()
+    if options:
+        result = await provider.send_quick_replies(phone, text, options)
+    else:
+        result = await provider.send_text(phone, text)
     if not result.ok:
         logger.error("Send to %s failed: %s", phone, result.error)
     # Outbound messages are not logged to DB — only inbound messages are stored

@@ -175,3 +175,29 @@ body {
     margin-top: 5px;
     display: none;
 }
+
+/* WhatsApp-style quick-reply buttons */
+.quick-replies {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 2px 0 8px 8px;
+    align-self: flex-start;
+}
+
+.quick-reply-btn {
+    background-color: #ffffff;
+    color: #027eb5;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.15);
+    transition: background-color 0.15s;
+}
+
+.quick-reply-btn:hover {
+    background-color: #f0f0f0;
+}

@@ -22,6 +22,22 @@ class GupshupWhatsAppProvider(WhatsAppProvider):
         self._client = client
 
     async def send_text(self, to_phone: str, text: str) -> SendResult:
+        return await self._send(to_phone, {"type": "text", "text": text})
+
+    async def send_quick_replies(
+        self, to_phone: str, text: str, options: list[str]
+    ) -> SendResult:
+        # WhatsApp interactive quick-reply: max 3 buttons, titles ≤ 20 chars.
+        # Tapping one delivers a button_reply webhook whose title we treat as
+        # inbound text (see parse_webhook).
+        message = {
+            "type": "quick_reply",
+            "content": {"type": "text", "text": text},
+            "options": [{"type": "text", "title": title[:20]} for title in options[:3]],
+        }
+        return await self._send(to_phone, message)
+
+    async def _send(self, to_phone: str, message: dict) -> SendResult:
         settings = get_settings()
         if not settings.gupshup_api_key or not settings.gupshup_source_number:
             return SendResult(ok=False, error="Gupshup credentials not configured")
@@ -31,7 +47,7 @@ class GupshupWhatsAppProvider(WhatsAppProvider):
             "source": settings.gupshup_source_number,
             "destination": to_phone,
             "src.name": settings.gupshup_app_name,
-            "message": json.dumps({"type": "text", "text": text}),
+            "message": json.dumps(message),
         }
         headers = {
             "apikey": settings.gupshup_api_key,

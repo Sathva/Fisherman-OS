@@ -27,6 +27,19 @@ class Settings(BaseSettings):
     gupshup_source_number: str = ""  # the bot's WhatsApp number, e.g. 917700012345
     gupshup_api_url: str = "https://api.gupshup.io/wa/api/v1/msg"
 
+    # --- LLM responder (Groq) ------------------------------------------------
+    # Answers free-form questions the keyword router can't handle. Leave the
+    # key empty to disable (the bot falls back to the static help reply).
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+    groq_api_url: str = "https://api.groq.com/openai/v1/chat/completions"
+    llm_enabled: bool = True
+    llm_timeout_seconds: float = 12.0
+    llm_max_output_tokens: int = 500
+    # Per-user inbound messages per hour before the LLM stops answering and
+    # the static help reply takes over (cost/abuse guard).
+    llm_rate_limit_per_hour: int = 30
+
     # --- Weather providers ---------------------------------------------------
     # "auto" tries INCOIS, then OpenWeatherMap, then the synthetic provider.
     weather_provider: str = "auto"  # auto | incois | openweathermap | synthetic

@@ -30,7 +30,7 @@ async def test_detailed_forecast_command(db, wa):
     wa.sent.clear()
     await handle_inbound(db, make_inbound(phone=PHONE, text="1"))
     assert len(wa.sent) == 1
-    assert "Detailed Forecast" in wa.sent[0][1]
+    assert "Fisherman OS" in wa.sent[0][1]
     assert "Source:" in wa.sent[0][1]
 
 

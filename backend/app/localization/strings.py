@@ -411,6 +411,32 @@ STRINGS: dict[str, dict[str, str]] = {
     "price_not_agent": {
         "en": "Price entry is only available to registered field agents.",
     },
+    "sos_confirm_prompt": {
+        "en": (
+            "⚠️ It sounds like you may be in danger.\n"
+            "If this is an EMERGENCY, tap the SOS button below — your emergency "
+            "contacts will be alerted immediately.\n"
+            "If everything is fine, just ignore this message."
+        ),
+        "kok": (
+            "⚠️ Tum sonkoxttant asa axem disota.\n"
+            "Hi APOTKALACHI porishiti zalear, sokoilo SOS button dam — tujea "
+            "apotkal somporkank rokdich khobor melltoli.\n"
+            "Sogllem borem asa zalear, ho sondex sodun di."
+        ),
+        "hi": (
+            "⚠️ लगता है आप खतरे में हो सकते हैं।\n"
+            "अगर यह आपातकाल है, तो नीचे SOS बटन दबाएँ — आपके आपातकालीन "
+            "संपर्कों को तुरंत सूचना मिलेगी।\n"
+            "अगर सब ठीक है, तो इस संदेश को अनदेखा करें।"
+        ),
+        "mr": (
+            "⚠️ तुम्ही धोक्यात असाल असे वाटते.\n"
+            "ही आपत्कालीन परिस्थिती असल्यास, खालील SOS बटण दाबा — तुमच्या "
+            "आपत्कालीन संपर्कांना लगेच कळवले जाईल.\n"
+            "सर्व ठीक असल्यास, हा संदेश दुर्लक्षित करा."
+        ),
+    },
 }
 
 

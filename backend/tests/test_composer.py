@@ -65,7 +65,7 @@ def test_morning_forecast_danger_in_konkani():
 
 def test_detailed_forecast_includes_source():
     text = composer.detailed_forecast(make_user(), make_forecast(), datetime(2026, 7, 8, 6, 0))
-    assert "Detailed Forecast" in text
+    assert "Fisherman OS" in text
     assert "Source: INCOIS" in text
 
 

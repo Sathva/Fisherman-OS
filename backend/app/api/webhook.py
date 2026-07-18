@@ -53,5 +53,12 @@ async def get_simulator_messages():
     provider = get_provider()
     if isinstance(provider, ConsoleWhatsAppProvider):
         # provider.sent is a list of tuples (phone, text)
-        return [{"phone": phone, "text": text} for phone, text in provider.sent]
+        return [
+            {
+                "phone": phone,
+                "text": text,
+                "buttons": provider.options_by_index.get(i, []),
+            }
+            for i, (phone, text) in enumerate(provider.sent)
+        ]
     return []

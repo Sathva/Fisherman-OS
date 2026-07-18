@@ -11,9 +11,10 @@ Flow priority:
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot import composer
@@ -27,10 +28,11 @@ from app.enums import (
     UserRole,
 )
 from app.localization.strings import t
-from app.models import User
+from app.models import MessageLog, User
 from app.providers.whatsapp.base import InboundMessage
 from app.seeds import resolve_species, species_display_name
-from app.services import price_service, sos_service, user_service, weather_service
+from app.services import llm_service, price_service, sos_service, user_service, weather_service
+from app.services.llm_service import LLMUnavailable
 from app.services.message_log import log_message
 from app.services.messenger import send_message
 from app.services.price_service import PriceSource
@@ -133,7 +135,8 @@ async def handle_inbound(session: AsyncSession, inbound: InboundMessage) -> list
     if upper.startswith("PRICE "):
         return await _handle_price_entry(session, user, command)
 
-    return [await _reply(session, user, t("unknown_command", user.language), MessageType.HELP)]
+    # --- 4. LLM fallback: everything the keyword router couldn't handle ------
+    return await _handle_llm_fallback(session, user, command)
 
 
 # --- SOS ---------------------------------------------------------------------
@@ -342,6 +345,122 @@ async def _send_price_digest(session: AsyncSession, user: User) -> list[str]:
     tip = price_service.best_market_tip(prices)
     text = composer.price_digest(user.language, by_center, tip, latest_day)
     return [await _reply(session, user, text, MessageType.PRICE_DIGEST)]
+
+
+# --- LLM fallback -------------------------------------------------------------------
+
+
+async def _llm_rate_limited(session: AsyncSession, user: User) -> bool:
+    """Cost/abuse guard: cap inbound messages per user per rolling hour."""
+    limit = get_settings().llm_rate_limit_per_hour
+    if limit <= 0:
+        return False
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+    count = (
+        await session.execute(
+            select(func.count(MessageLog.id)).where(
+                MessageLog.phone == user.phone,
+                MessageLog.direction == MessageDirection.INBOUND,
+                MessageLog.created_at >= cutoff,
+            )
+        )
+    ).scalar_one()
+    return count > limit
+
+
+async def _build_llm_context(session: AsyncSession, user: User) -> str:
+    """Compact, factual data block the LLM is allowed to quote from."""
+    now = _now_ist()
+    lines = [f"Current date/time (IST): {now.strftime('%A %d %B %Y, %I:%M %p')}"]
+
+    village = await _get_user_village(session, user)
+    if village is not None:
+        try:
+            forecast, coastal_reports = await weather_service.get_or_create_forecast(
+                session, village, now.date()
+            )
+            lines.append(
+                f"Sea forecast for {village.name} today: safety={forecast.safety_level.name}, "
+                f"wind {forecast.wind_speed_kmh:.0f} km/h {forecast.wind_direction}, "
+                f"waves {forecast.wave_height_m:.1f} m, rain chance {forecast.rain_probability}%."
+            )
+            if forecast.advisory:
+                lines.append(f"Advisory: {forecast.advisory}")
+            for report in coastal_reports or []:
+                lines.append(
+                    f"- {report.name}: wind {report.wind_speed_kmh:.0f} km/h "
+                    f"{report.wind_direction}, waves {report.wave_height_m:.1f} m, "
+                    f"rain {report.rain_probability}%."
+                )
+        except Exception:
+            logger.exception("LLM context: forecast fetch failed for %s", village.name)
+            lines.append(
+                "Sea forecast: currently unavailable — tell the user to send 1 and try again later."
+            )
+    else:
+        lines.append("Sea forecast: no village configured — user can set one with VILLAGE <name>.")
+
+    try:
+        latest_day = await price_service.get_latest_price_day(session, now.date())
+        if latest_day is not None:
+            prices = await price_service.get_prices_for_day(session, latest_day)
+            quotes = ", ".join(
+                f"{p.species} ₹{p.price_per_kg:.0f}/kg at {p.landing_center.name}"
+                for p in prices[:15]
+            )
+            lines.append(f"Fish prices ({latest_day.strftime('%d %b')}): {quotes}")
+        else:
+            lines.append("Fish prices: none reported yet today.")
+    except Exception:
+        logger.exception("LLM context: price fetch failed")
+        lines.append("Fish prices: currently unavailable.")
+
+    return "\n".join(lines)
+
+
+async def _handle_llm_fallback(session: AsyncSession, user: User, command: str) -> list[str]:
+    """Unmatched message from a registered user → single Groq call that either
+    routes to an existing structured handler or answers/declines directly.
+    Any LLM failure degrades to the old static help reply — never silence."""
+    if not llm_service.is_configured() or await _llm_rate_limited(session, user):
+        return [await _reply(session, user, t("unknown_command", user.language), MessageType.HELP)]
+
+    context_block = await _build_llm_context(session, user)
+    try:
+        decision = await llm_service.classify_and_answer(user, command, context_block)
+    except LLMUnavailable:
+        return [await _reply(session, user, t("unknown_command", user.language), MessageType.HELP)]
+
+    if decision.intent == "forecast":
+        return await _send_detailed_forecast(session, user)
+    if decision.intent == "prices":
+        return await _send_price_digest(session, user)
+    if decision.intent == "help":
+        return [await _reply(session, user, t("help", user.language), MessageType.HELP)]
+    if decision.intent == "stop":
+        user.subscribed = False
+        await session.commit()
+        return [await _reply(session, user, t("stopped", user.language))]
+    if decision.intent == "start":
+        user.subscribed = True
+        await session.commit()
+        return [await _reply(session, user, t("started", user.language))]
+    if decision.intent == "language":
+        user.onboarding_state = OnboardingState.AWAITING_LANGUAGE
+        await session.commit()
+        return [await _reply(session, user, t("language_menu", user.language))]
+    if decision.intent == "emergency":
+        # The LLM never triggers SOS itself — one tap on the button sends
+        # "SOS", which goes through the exact same keyword path as typing it.
+        text = t("sos_confirm_prompt", user.language)
+        await send_message(
+            session, phone=user.phone, text=text, user_id=user.id,
+            message_type=MessageType.SOS, options=["SOS"],
+        )
+        return [text]
+
+    # "answer" and "off_topic": send the LLM's own (grounded or declining) text.
+    return [await _reply(session, user, decision.reply, MessageType.GENERIC)]
 
 
 # --- Profile & agent commands -------------------------------------------------------

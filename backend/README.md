@@ -77,6 +77,37 @@ docker compose up --build   # API on :8000 + Postgres 16
 | `STOP` / `START` | Pause / resume daily pushes (SOS always stays active) |
 | `HELP` | Command menu |
 | `PRICE <center> <species> <₹/kg>` | Field agents only: submit a price (e.g. `PRICE Betul bangdo 85`) |
+| *anything else* | LLM responder (see below) |
+
+## LLM responder (Groq)
+
+Messages that don't match a command above go to a Groq LLM
+(`llama-3.3-70b-versatile` by default) that classifies intent and answers in
+the user's language (English, Romi Konkani, Hindi, Marathi — it mirrors the
+message language when it differs from the profile). One chat call returns
+`{"intent", "reply"}`:
+
+- **forecast / prices / help / stop / start / language** → routed to the same
+  structured handlers as the keyword commands (`"aaj samudra kasa aahe?"`
+  gets the real forecast template, not free-form prose).
+- **emergency** — natural-language distress (`"majhi hod budte aahe"`) gets a
+  localized confirmation with a **one-tap SOS button**; tapping it sends
+  `SOS` through the normal keyword path. The LLM can never raise an alert
+  itself.
+- **answer** — relevant free-form questions, grounded ONLY in the live
+  forecast + price data injected into the prompt (it is instructed never to
+  invent numbers).
+- **off_topic** — polite localized decline for anything unrelated.
+
+Safeguards: the user message is passed as data with anti-injection rules,
+intents are allowlisted, replies are length-clamped, there's a per-user
+hourly rate limit (`LLM_RATE_LIMIT_PER_HOUR`), and any failure — key unset,
+Groq down, timeout, malformed output — falls back to the static help reply,
+so the bot never goes silent.
+
+Setup: set `GROQ_API_KEY` in the environment (Vercel → Project → Settings →
+Environment Variables). Never commit the key. Leave it empty to disable the
+LLM path entirely.
 
 ## HTTP API
 
