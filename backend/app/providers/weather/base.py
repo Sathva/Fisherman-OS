@@ -41,6 +41,9 @@ class WeatherReading:
     hourly: list[tuple[float, float, int]] = field(default_factory=list)  # (wind, wave, rain%)
     # Per-coast breakdown when multiple INCOIS points were used
     coastal_reports: list[CoastalReport] = field(default_factory=list)
+    # User-facing note when PFZ (fishing zone) data was unavailable and the
+    # reading fell back to plain weather near the village.
+    pfz_note: Optional[str] = None
 
 
 class WeatherProvider(abc.ABC):

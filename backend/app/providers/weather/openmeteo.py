@@ -4,6 +4,7 @@ from datetime import date, datetime
 import httpx
 from bs4 import BeautifulSoup
 
+from app.config import get_settings
 from app.enums import WeatherSource
 from app.providers.weather.base import (
     WeatherProvider,
@@ -13,6 +14,29 @@ from app.providers.weather.base import (
     degrees_to_compass,
 )
 from app.services.safety import estimate_wave_height_from_wind
+
+# INCOIS divides the coastline into sectors; the TextData page takes a
+# secid (SEC001..SEC014) and shows that sector's PFZ table with the sector
+# name in <p id="sectorname">. Confirmed mapping so far:
+_KNOWN_SECIDS: dict[str, str] = {
+    "WEST BENGAL": "SEC011",
+}
+_SECID_CANDIDATES = [f"SEC{i:03d}" for i in range(1, 15)]
+# Filled at runtime by probing the sector pages once (per process).
+_secid_cache: dict[str, str] = {}
+
+
+def extract_sector_name(html: str) -> str | None:
+    """Pull the sector/state name out of an INCOIS TextData page."""
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        node = soup.find(id="sectorname")
+        if node is not None:
+            name = node.get_text(strip=True).upper()
+            return name or None
+    except Exception:
+        pass
+    return None
 
 
 def dms_to_decimal(dms_str: str) -> float | None:
@@ -37,13 +61,46 @@ def dms_to_decimal(dms_str: str) -> float | None:
 
 class OpenMeteoProvider(WeatherProvider):
     source = WeatherSource.OPENMETEO
-    INCOIS_DATA_URL = "https://incois.gov.in/MarineFisheries/TextData?secid=SEC011"
+    INCOIS_DATA_URL_TEMPLATE = "https://incois.gov.in/MarineFisheries/TextData?secid={secid}"
     INCOIS_HOME_URL = "https://incois.gov.in/MarineFisheries/TextDataHome?mfid=1&request_locale=en"
 
     def __init__(self, client: httpx.AsyncClient | None = None):
         self._client = client
 
-    async def fetch(self, latitude: float, longitude: float, day: date, village_name: str = "") -> WeatherReading:
+    async def _resolve_secid(
+        self, client: httpx.AsyncClient, headers: dict, state_key: str
+    ) -> str | None:
+        """secid for a state: env override > known map > runtime discovery."""
+        override = (get_settings().incois_secid or "").strip()
+        if override:
+            if override.isdigit():
+                override = f"SEC{int(override):03d}"
+            return override.upper()
+        secid = _KNOWN_SECIDS.get(state_key) or _secid_cache.get(state_key)
+        if secid:
+            return secid
+
+        async def probe(candidate: str) -> tuple[str, str | None]:
+            try:
+                resp = await client.get(
+                    self.INCOIS_DATA_URL_TEMPLATE.format(secid=candidate),
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                return candidate, extract_sector_name(resp.text)
+            except Exception:
+                return candidate, None
+
+        results = await asyncio.gather(*(probe(c) for c in _SECID_CANDIDATES))
+        for candidate, sector_name in results:
+            if sector_name and sector_name not in _secid_cache:
+                _secid_cache[sector_name] = candidate
+        return _secid_cache.get(state_key)
+
+    async def fetch(
+        self, latitude: float, longitude: float, day: date,
+        village_name: str = "", state: str = "",
+    ) -> WeatherReading:
         MAX_NEAREST = 5  # Show up to 5 nearest INCOIS coastal points
 
         client = self._client or httpx.AsyncClient(timeout=15, verify=False)
@@ -59,20 +116,35 @@ class OpenMeteoProvider(WeatherProvider):
             "Sec-GPC": "1",
         }
         
+        state_key = (state or "GOA").strip().upper()
+        state_label = state_key.title()
+
         try:
             # 1. Fetch JSESSIONID cookie
             await client.get(self.INCOIS_HOME_URL, headers=headers)
-            
-            # 2. Fetch the HTML data page
-            response = await client.get(self.INCOIS_DATA_URL, headers=headers)
-            response.raise_for_status()
-            
+
+            # 2. Resolve the sector id for the village's state, then fetch its page
+            secid = await self._resolve_secid(client, headers, state_key)
+            pfz_note: str | None = None
+            page_text = ""
+            if secid is None:
+                pfz_note = (
+                    f"Fishing zone data isn't available for {state_label} right now, "
+                    "so this is the weather near your village only."
+                )
+            else:
+                response = await client.get(
+                    self.INCOIS_DATA_URL_TEMPLATE.format(secid=secid), headers=headers
+                )
+                response.raise_for_status()
+                page_text = response.text
+
             # List of (dist, name, lat, lon, direction, bearing, distance_km, depth) tuples
             all_points: list[tuple[float, str, float, float, str, str, str, str]] = []
-            
+
             try:
                 # 3. Parse coordinates, coast name, and PFZ data using BeautifulSoup
-                soup = BeautifulSoup(response.text, "html.parser")
+                soup = BeautifulSoup(page_text, "html.parser")
                 forecast_div = soup.find('div', id='forecastdata')
                 
                 if forecast_div:
@@ -118,6 +190,18 @@ class OpenMeteoProvider(WeatherProvider):
 
             # Fallback: use the village's own coordinates if INCOIS had no data
             if not nearby_points:
+                if pfz_note is None:
+                    if "ban" in page_text.lower():
+                        pfz_note = (
+                            f"INCOIS has suspended fishing zone data for {state_label} "
+                            "(seasonal fishing ban), so this is the weather near your "
+                            "village only."
+                        )
+                    else:
+                        pfz_note = (
+                            f"Fishing zone data isn't available for {state_label} today, "
+                            "so this is the weather near your village only."
+                        )
                 fallback_name = village_name or f"{latitude:.3f}°N, {longitude:.3f}°E"
                 nearby_points.append((fallback_name, latitude, longitude, "", "", "", ""))
 
@@ -167,6 +251,7 @@ class OpenMeteoProvider(WeatherProvider):
                 source=self.source,
                 hourly=base_reading.hourly,
                 coastal_reports=coastal_reports,
+                pfz_note=pfz_note,
             )
 
         except Exception as e:

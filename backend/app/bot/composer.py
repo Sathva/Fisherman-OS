@@ -81,6 +81,9 @@ def morning_forecast(user: User, forecast: WeatherForecast, now: datetime) -> st
         lines.append(f"🌡️ {t('sea_temp', language)}: {forecast.sea_temp_c:.1f}°C")
     if forecast.advisory:
         lines += ["", f"⚠️ {forecast.advisory}"]
+    pfz_note = getattr(forecast, "pfz_note", None)
+    if pfz_note:
+        lines += ["", f"🎣 {pfz_note}"]
     strip = "".join(level.emoji for level in forecast.hourly_level_list()) or level.emoji * 6
     lines += [
         "",
@@ -165,6 +168,10 @@ def detailed_forecast(user: User, forecast: WeatherForecast, now: datetime, coas
         if forecast.advisory:
             lines += ["", f"⚠️ {forecast.advisory}"]
         lines.append("")
+
+    pfz_note = getattr(forecast, "pfz_note", None)
+    if pfz_note:
+        lines += [f"🎣 {pfz_note}", ""]
 
     lines += [
         t("menu_footer", language),

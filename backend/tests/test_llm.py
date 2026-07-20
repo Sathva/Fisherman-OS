@@ -180,6 +180,53 @@ async def test_rate_limit_blocks_llm(db, wa, llm_on, monkeypatch):
     assert "HELP" in wa.sent[0][1]
 
 
+# --- Village name spell-correction ---------------------------------------------
+
+
+async def test_misspelled_village_corrected_via_llm(db, wa, llm_on, monkeypatch):
+    async def _fake_post_chat(messages):
+        return json.dumps({"village": "Cavelossim"})
+
+    monkeypatch.setattr(llm_service, "_post_chat", _fake_post_chat)
+
+    user = await register_user(db, wa, PHONE, village="Kavelosim")
+    assert user.village is not None
+    assert user.village.name == "Cavelossim"
+
+
+async def test_village_correction_null_falls_back_to_default(db, wa, llm_on, monkeypatch):
+    async def _fake_post_chat(messages):
+        return json.dumps({"village": None})
+
+    monkeypatch.setattr(llm_service, "_post_chat", _fake_post_chat)
+
+    user = await register_user(db, wa, PHONE, village="Xyzville")
+    assert user.village is not None
+    assert user.village.name == "Betul"  # default fallback village
+
+
+async def test_village_correction_rejects_invented_names(db, wa, llm_on, monkeypatch):
+    async def _fake_post_chat(messages):
+        return json.dumps({"village": "Atlantis"})  # not in the seed list
+
+    monkeypatch.setattr(llm_service, "_post_chat", _fake_post_chat)
+
+    user = await register_user(db, wa, PHONE, village="Atlantis")
+    assert user.village is not None
+    assert user.village.name == "Betul"  # invented name ignored -> fallback
+
+
+async def test_village_correction_survives_llm_failure(db, wa, llm_on, monkeypatch):
+    async def _boom(messages):
+        raise httpx.ConnectError("groq down")
+
+    monkeypatch.setattr(llm_service, "_post_chat", _boom)
+
+    user = await register_user(db, wa, PHONE, village="Kavelosim")
+    assert user.village is not None
+    assert user.village.name == "Betul"  # degraded to the old fallback
+
+
 # --- Output parsing robustness -------------------------------------------------
 
 

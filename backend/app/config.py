@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # "auto" tries INCOIS, then OpenWeatherMap, then the synthetic provider.
     weather_provider: str = "auto"  # auto | incois | openweathermap | synthetic
     incois_rss_url: str = "https://tools.incois.gov.in/osf/rss/goa.xml"
+    # Force one INCOIS MarineFisheries sector for PFZ data (e.g. "SEC011" or
+    # "011" = West Bengal). Empty = pick automatically from the village's state.
+    incois_secid: str = ""
     openweather_api_key: str = ""
     openweather_api_url: str = "https://api.openweathermap.org/data/2.5/forecast"
 

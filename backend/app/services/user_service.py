@@ -66,7 +66,20 @@ async def match_village(session: AsyncSession, raw_name: str) -> Village | None:
         v for v in villages
         if v.name.lower().startswith(needle) or needle in v.name.lower()
     ]
-    return candidates[0] if len(candidates) >= 1 else None
+    if candidates:
+        return candidates[0]
+
+    # Last resort: Groq fixes typos/phonetic spellings ("Bettul" -> "Betul").
+    from app.services import llm_service
+
+    corrected = await llm_service.correct_village_name(
+        raw_name, [v.name for v in villages]
+    )
+    if corrected:
+        for village in villages:
+            if village.name == corrected:
+                return village
+    return None
 
 
 async def default_village(session: AsyncSession) -> Village | None:

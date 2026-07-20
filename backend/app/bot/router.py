@@ -386,6 +386,9 @@ async def _build_llm_context(session: AsyncSession, user: User) -> str:
             )
             if forecast.advisory:
                 lines.append(f"Advisory: {forecast.advisory}")
+            pfz_note = getattr(forecast, "pfz_note", None)
+            if pfz_note:
+                lines.append(f"Fishing zone (PFZ) data: {pfz_note}")
             for report in coastal_reports or []:
                 lines.append(
                     f"- {report.name}: wind {report.wind_speed_kmh:.0f} km/h "

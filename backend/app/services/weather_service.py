@@ -29,6 +29,21 @@ _PROVIDERS: dict[str, type[WeatherProvider]] = {
     "openmeteo": OpenMeteoProvider,
 }
 
+# District -> state, used to pick the INCOIS sector (secid) for PFZ data.
+# Extend this as villages from new states are seeded.
+_STATE_BY_DISTRICT: dict[str, str] = {
+    "south goa": "GOA",
+    "north goa": "GOA",
+    "south 24 parganas": "WEST BENGAL",
+    "north 24 parganas": "WEST BENGAL",
+    "purba medinipur": "WEST BENGAL",
+}
+
+
+def state_for_village(village: Village) -> str:
+    district = (village.district or "").strip().lower()
+    return _STATE_BY_DISTRICT.get(district, "GOA")
+
 
 def build_provider_chain() -> list[WeatherProvider]:
     mode = get_settings().weather_provider
@@ -45,11 +60,14 @@ async def fetch_reading(village: Village, day: date) -> WeatherReading:
     last_error: Exception | None = None
     for provider in build_provider_chain():
         try:
-            # Pass village_name as a hint for the fallback label
-            if hasattr(provider, 'fetch') and 'village_name' in provider.fetch.__code__.co_varnames:
-                reading = await provider.fetch(village.latitude, village.longitude, day, village_name=village.name)
-            else:
-                reading = await provider.fetch(village.latitude, village.longitude, day)
+            # Pass village_name / state hints to providers that accept them
+            fetch_params = provider.fetch.__code__.co_varnames
+            kwargs = {}
+            if "village_name" in fetch_params:
+                kwargs["village_name"] = village.name
+            if "state" in fetch_params:
+                kwargs["state"] = state_for_village(village)
+            reading = await provider.fetch(village.latitude, village.longitude, day, **kwargs)
             logger.info("Weather for %s on %s from %s", village.name, day, provider.source.value)
             return reading
         except WeatherUnavailable as exc:
@@ -107,6 +125,9 @@ async def get_or_create_forecast(
         hourly_levels=",".join(level.value for level in hourly),
         source=reading.source,
     )
+    # Transient-only extra: carried on the instance so composers can show why
+    # PFZ data is missing (never persisted — forecasts aren't stored anyway).
+    forecast.pfz_note = reading.pfz_note
     # Not persisted — transient object only, no DB commit
     return forecast, reading.coastal_reports
 

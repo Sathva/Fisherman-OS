@@ -89,6 +89,49 @@ async def test_forecast_has_safety_and_hourly_strip(db):
     assert forecast.source == WeatherSource.SYNTHETIC
 
 
+def test_extract_sector_name_from_incois_page():
+    from app.providers.weather.openmeteo import extract_sector_name
+
+    html = '<p id="sectorname" style="font-size:16px;">WEST BENGAL</p>'
+    assert extract_sector_name(html) == "WEST BENGAL"
+    assert extract_sector_name("<html><body>no sector</body></html>") is None
+
+
+def test_state_for_village_derived_from_district():
+    goa = Village(name="Betul2", taluka="Salcete", district="South Goa",
+                  latitude=15.1, longitude=73.9)
+    bengal = Village(name="Frasergunj", taluka="Namkhana",
+                     district="South 24 Parganas", latitude=21.5, longitude=88.2)
+    assert weather_service.state_for_village(goa) == "GOA"
+    assert weather_service.state_for_village(bengal) == "WEST BENGAL"
+
+
+async def test_pfz_note_travels_into_forecast_messages(db):
+    from datetime import datetime
+
+    from app.bot import composer
+    from app.enums import Language
+    from app.models import User
+
+    village = (
+        await db.execute(select(Village).where(Village.name == "Betul"))
+    ).scalar_one()
+    forecast, reports = await weather_service.get_or_create_forecast(
+        db, village, date(2026, 7, 8)
+    )
+    assert forecast.pfz_note is None  # synthetic provider has no PFZ concept
+
+    note = ("Fishing zone data isn't available for Goa today, "
+            "so this is the weather near your village only.")
+    forecast.pfz_note = note
+    user = User(phone="919800000000", language=Language.ENGLISH)
+
+    detailed = composer.detailed_forecast(user, forecast, datetime(2026, 7, 8, 6, 0), reports)
+    morning = composer.morning_forecast(user, forecast, datetime(2026, 7, 8, 3, 30))
+    assert note in detailed
+    assert note in morning
+
+
 async def test_refresh_forecast_returns_fresh_forecast(db):
     village = (
         await db.execute(select(Village).where(Village.name == "Betul"))
