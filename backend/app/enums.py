@@ -31,6 +31,9 @@ class OnboardingState(str, enum.Enum):
     AWAITING_VILLAGE = "awaiting_village"
     AWAITING_BOAT_TYPE = "awaiting_boat_type"
     REGISTERED = "registered"
+    # Post-registration conversational state: user asked for prices and we're
+    # waiting for them to say which fish they want.
+    AWAITING_FISH_TYPE = "awaiting_fish_type"
 
 
 class SubscriptionStatus(str, enum.Enum):

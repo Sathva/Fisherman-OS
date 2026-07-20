@@ -216,6 +216,40 @@ def price_digest(
     return "\n".join(lines)
 
 
+def live_species_prices(
+    user: User,
+    species_key: str,
+    quotes: list,           # list[fmpis.MarketQuote]
+    nearest_market_name: str,
+) -> str:
+    """Reply for one fish across the Goa FMPIS markets — nearest market first,
+    best-price tip at the end. `quotes` must be non-empty."""
+    language = user.language
+    species_name = species_display_name(species_key, language.value)
+    village_name = user.village.name if user.village else "your village"
+
+    nearest = [q for q in quotes if q.market.name == nearest_market_name]
+    others = [q for q in quotes if q.market.name != nearest_market_name]
+
+    lines = [t("live_price_header", language, species=species_name), ""]
+    if nearest:
+        quote = nearest[0]
+        lines.append(
+            f"📍 {quote.market.name} (nearest to {village_name}): "
+            f"₹{quote.price_per_kg:.0f}/kg"
+        )
+    else:
+        lines.append(f"📍 No listing at the market nearest to {village_name} today.")
+    for quote in others:
+        lines.append(f"• {quote.market.name}: ₹{quote.price_per_kg:.0f}/kg")
+
+    best = max(quotes, key=lambda q: q.price_per_kg)
+    if len(quotes) > 1:
+        lines += ["", f"💡 Best price: {best.market.name} — ₹{best.price_per_kg:.0f}/kg"]
+    lines += ["", t("price_footer", language)]
+    return "\n".join(lines)
+
+
 def sos_activated(user: User, alert: SOSAlert, coast_guard: str) -> str:
     language = user.language
     if alert.last_latitude is not None and alert.last_longitude is not None:

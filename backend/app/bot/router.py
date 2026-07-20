@@ -29,6 +29,8 @@ from app.enums import (
 )
 from app.localization.strings import t
 from app.models import MessageLog, User
+from app.providers.prices import fmpis
+from app.providers.prices.fmpis import FMPISUnavailable
 from app.providers.whatsapp.base import InboundMessage
 from app.seeds import resolve_species, species_display_name
 from app.services import llm_service, price_service, sos_service, user_service, weather_service
@@ -105,15 +107,27 @@ async def handle_inbound(session: AsyncSession, inbound: InboundMessage) -> list
     if upper in CANCEL_KEYWORDS:
         return await _handle_cancel(session, user)
 
-    # --- 2. Onboarding state machine -----------------------------------------
+    # --- 2. Price flow: we asked which fish they want -------------------------
+    if user.onboarding_state == OnboardingState.AWAITING_FISH_TYPE:
+        return await _handle_fish_type_reply(session, user, command)
+
+    # --- 3. Onboarding state machine -----------------------------------------
     if user.onboarding_state != OnboardingState.REGISTERED:
         return await _handle_onboarding(session, user, command, created)
 
-    # --- 3. Registered-user commands ------------------------------------------
+    return await _handle_registered_command(session, user, command)
+
+
+async def _handle_registered_command(
+    session: AsyncSession, user: User, command: str
+) -> list[str]:
+    """Keyword commands for registered users, with the LLM as last resort."""
+    upper = command.strip().upper()
+
     if upper == "1":
         return await _send_detailed_forecast(session, user)
     if upper in PRICE_KEYWORDS:
-        return await _send_price_digest(session, user)
+        return await _ask_fish_type(session, user)
     if upper == "STOP":
         user.subscribed = False
         await session.commit()
@@ -347,6 +361,79 @@ async def _send_price_digest(session: AsyncSession, user: User) -> list[str]:
     return [await _reply(session, user, text, MessageType.PRICE_DIGEST)]
 
 
+# --- Live per-species prices (FMPIS) ------------------------------------------
+
+# Quick-reply buttons shown with the "which fish?" prompt.
+_FISH_BUTTON_SPECIES = ["mackerel", "sardine", "kingfish", "pomfret", "prawns"]
+
+
+async def _ask_fish_type(session: AsyncSession, user: User) -> list[str]:
+    """Step 1 of the price flow: ask which fish before quoting prices."""
+    user.onboarding_state = OnboardingState.AWAITING_FISH_TYPE
+    await session.commit()
+    text = t("ask_fish_type", user.language)
+    options = [
+        species_display_name(key, user.language.value) for key in _FISH_BUTTON_SPECIES
+    ]
+    await send_message(
+        session, phone=user.phone, text=text, user_id=user.id,
+        message_type=MessageType.PRICE_DIGEST, options=options,
+    )
+    return [text]
+
+
+async def _handle_fish_type_reply(
+    session: AsyncSession, user: User, command: str
+) -> list[str]:
+    """Step 2: resolve the fish they named and send only that fish's prices."""
+    # Leave the waiting state before anything else — no way to get stuck here.
+    user.onboarding_state = OnboardingState.REGISTERED
+    await session.commit()
+
+    if command.strip().upper() == "ALL":
+        return await _send_price_digest(session, user)
+
+    species = resolve_species(command)
+    if species is None:
+        species = await llm_service.correct_species_name(command)
+    if species is None:
+        # Not a fish we know — treat it as a normal command/question instead.
+        return await _handle_registered_command(session, user, command)
+
+    return await _send_live_species_prices(session, user, species)
+
+
+async def _send_live_species_prices(
+    session: AsyncSession, user: User, species: str
+) -> list[str]:
+    village = await _get_user_village(session, user)
+    if village is not None:
+        nearest = fmpis.nearest_market(village.latitude, village.longitude)
+    else:
+        nearest = fmpis.GOA_MARKETS[0]
+
+    try:
+        quotes = await fmpis.fetch_species_quotes(species)
+    except FMPISUnavailable as exc:
+        logger.warning("FMPIS unavailable, falling back to recorded prices: %s", exc)
+        warning = await _reply(
+            session, user, t("live_prices_unavailable", user.language),
+            MessageType.PRICE_DIGEST,
+        )
+        return [warning] + await _send_price_digest(session, user)
+
+    if not quotes:
+        name = species_display_name(species, user.language.value)
+        return [await _reply(
+            session, user,
+            t("species_not_listed", user.language, species=name),
+            MessageType.PRICE_DIGEST,
+        )]
+
+    text = composer.live_species_prices(user, species, quotes, nearest.name)
+    return [await _reply(session, user, text, MessageType.PRICE_DIGEST)]
+
+
 # --- LLM fallback -------------------------------------------------------------------
 
 
@@ -457,7 +544,7 @@ async def _handle_llm_fallback(session: AsyncSession, user: User, command: str) 
     if decision.intent == "forecast":
         return replies + await _send_detailed_forecast(session, user)
     if decision.intent == "prices":
-        return replies + await _send_price_digest(session, user)
+        return replies + await _ask_fish_type(session, user)
     if decision.intent == "help":
         return replies + [await _reply(session, user, t("help", user.language), MessageType.HELP)]
     if decision.intent == "stop":

@@ -54,6 +54,14 @@ class Settings(BaseSettings):
     openweather_api_key: str = ""
     openweather_api_url: str = "https://api.openweathermap.org/data/2.5/forecast"
 
+    # --- FMPIS live market prices (NFDB) ------------------------------------
+    # Live per-market fish prices scraped from the FMPIS dashboard's JSON
+    # endpoint. Disable to fall back to field-agent prices only.
+    fmpis_enabled: bool = True
+    fmpis_base_url: str = "https://fmpisnfdb.in"
+    fmpis_state_id: str = "6"  # Goa
+    fmpis_timeout_seconds: float = 12.0
+
     # --- Scheduler -----------------------------------------------------------
     enable_scheduler: bool = True
     morning_forecast_hour: int = 3

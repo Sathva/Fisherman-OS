@@ -3,7 +3,7 @@
 from datetime import date
 
 from app.bot.router import handle_inbound
-from app.enums import PriceSource, UserRole
+from app.enums import OnboardingState, PriceSource, UserRole
 from app.services import price_service
 from app.services.user_service import get_user_by_phone
 from tests.conftest import make_inbound, register_user
@@ -34,22 +34,42 @@ async def test_detailed_forecast_command(db, wa):
     assert "Source:" in wa.sent[0][1]
 
 
-async def test_prices_command(db, wa):
+async def test_prices_command_asks_for_fish_first(db, wa):
+    await register_user(db, wa, PHONE)
+    wa.sent.clear()
+    wa.options_by_index.clear()
+    await handle_inbound(db, make_inbound(phone=PHONE, text="PRICES"))
+
+    assert len(wa.sent) == 1
+    assert "Which fish" in wa.sent[0][1]
+    assert "Mackerel" in wa.options_by_index.get(0, [])  # quick-reply buttons
+
+    user = await get_user_by_phone(db, PHONE)
+    assert user.onboarding_state == OnboardingState.AWAITING_FISH_TYPE
+
+
+async def test_prices_all_returns_full_digest(db, wa):
     await register_user(db, wa, PHONE)
     await seed_prices(db)
     wa.sent.clear()
     await handle_inbound(db, make_inbound(phone=PHONE, text="PRICES"))
-    text = wa.sent[0][1]
+    await handle_inbound(db, make_inbound(phone=PHONE, text="ALL"))
+
+    text = wa.sent[1][1]
     assert "Betul Landing" in text
     assert "Mackerel ₹85/kg" in text
     assert "29% more" in text  # Margao vs Betul tip
+
+    user = await get_user_by_phone(db, PHONE)
+    assert user.onboarding_state == OnboardingState.REGISTERED
 
 
 async def test_prices_command_no_data(db, wa):
     await register_user(db, wa, PHONE)
     wa.sent.clear()
     await handle_inbound(db, make_inbound(phone=PHONE, text="2"))
-    assert "No market prices" in wa.sent[0][1]
+    await handle_inbound(db, make_inbound(phone=PHONE, text="ALL"))
+    assert "No market prices" in wa.sent[1][1]
 
 
 async def test_stop_and_start(db, wa):

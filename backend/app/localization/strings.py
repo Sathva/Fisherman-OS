@@ -206,6 +206,46 @@ STRINGS: dict[str, dict[str, str]] = {
         "hi": "आज अभी तक दाम नहीं आए हैं। हमारा एजेंट सुबह 5 बजे तक दाम भेजता है — थोड़ी देर में देखें!",
         "mr": "आज अजून दर आलेले नाहीत. आमचा एजंट पहाटे 5 पर्यंत दर पाठवतो — थोड्या वेळाने पहा!",
     },
+    "ask_fish_type": {
+        "en": (
+            "Which fish do you want prices for? 🐟\n"
+            "Tap a button or type the name (e.g. Bangdo, Tarlo, Visvon).\n"
+            "Reply ALL for the full price list."
+        ),
+        "kok": (
+            "Khoinchea nusteachem mol zai? 🐟\n"
+            "Button dam vo nanv boroi (dekhik: Bangdo, Tarlo, Visvon).\n"
+            "Sogli list zai zalear ALL boroi."
+        ),
+        "hi": (
+            "किस मछली का दाम चाहिए? 🐟\n"
+            "बटन दबाएँ या नाम लिखें (जैसे: Bangda, Pedvey, Surmai)।\n"
+            "पूरी सूची के लिए ALL भेजें।"
+        ),
+        "mr": (
+            "कोणत्या माशाचा दर हवा आहे? 🐟\n"
+            "बटण दाबा किंवा नाव लिहा (उदा: Bangda, Tarli, Surmai).\n"
+            "संपूर्ण यादीसाठी ALL पाठवा."
+        ),
+    },
+    "live_price_header": {
+        "en": "🐟 {species} — market prices today",
+        "kok": "🐟 {species} — aiz bazarachem mol",
+        "hi": "🐟 {species} — आज बाज़ार के दाम",
+        "mr": "🐟 {species} — आज बाजारातील दर",
+    },
+    "species_not_listed": {
+        "en": "No {species} listed in the Goa markets right now. Try another fish, or reply ALL for our latest recorded prices.",
+        "kok": "Atam Goychea bazarant {species} na. Dusrem nustem vichar, vo ALL boroi.",
+        "hi": "अभी गोवा के बाज़ारों में {species} सूचीबद्ध नहीं है। दूसरी मछली पूछें, या ALL भेजें।",
+        "mr": "सध्या गोव्याच्या बाजारात {species} नाही. दुसरा मासा विचारा, किंवा ALL पाठवा.",
+    },
+    "live_prices_unavailable": {
+        "en": "⚠️ Live market prices are unavailable right now — showing our latest recorded prices instead.",
+        "kok": "⚠️ Atam live mol melltta na — amchem xevottchem nondlelem mol dakhoitam.",
+        "hi": "⚠️ अभी लाइव दाम उपलब्ध नहीं हैं — हमारे पास दर्ज ताज़ा दाम दिखा रहे हैं।",
+        "mr": "⚠️ सध्या लाइव्ह दर उपलब्ध नाहीत — आमच्याकडे नोंदवलेले ताजे दर दाखवत आहोत.",
+    },
     # --- SOS -----------------------------------------------------------------------
     "sos_activated": {
         "en": (

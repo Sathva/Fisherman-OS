@@ -15,6 +15,7 @@ SOS distress flow** — in English, Konkani (Romi), Hindi and Marathi.
 | Message composer (Konkani + English templates) | `app/bot/composer.py`, `app/localization/strings.py` (en/kok/hi/mr) |
 | Scheduled 3:30 AM forecast push | `app/scheduler.py` (APScheduler, Asia/Kolkata) |
 | Market price pipeline (field agents by 5 AM) | `app/services/price_service.py`, `POST /admin/prices`, WhatsApp `PRICE` command |
+| Live per-fish market prices (FMPIS/NFDB, all Goa markets) | `app/providers/prices/fmpis.py`, ask-which-fish flow in `app/bot/router.py` |
 | Price digest push at 5 AM + "💡 TIP" market-switch nudge | `app/scheduler.py`, `best_market_tip()` |
 | SOS system (location sharing + ICG 1554 + contacts) | `app/services/sos_service.py`, 5-minute follow-up job |
 | Onboarding via WhatsApp ("Hi" → name, village, boat) | `app/bot/router.py` state machine; first forecast sent immediately |
@@ -67,7 +68,7 @@ docker compose up --build   # API on :8000 + Postgres 16
 |:---|:---|
 | `Hi` (first contact) | Registration: language → name → village → boat type → first forecast |
 | `1` | Detailed forecast (with source + issue time) |
-| `2` / `PRICES` | Latest market prices + best-market tip |
+| `2` / `PRICES` | Asks which fish, then live per-fish prices across all Goa markets (nearest first); `ALL` for the full digest |
 | `SOS` | Emergency: alert created, contacts notified, 1554 surfaced, 5-min location loop |
 | *share location* | Attached to the active SOS; contacts get the maps link |
 | `CANCEL` | Deactivate SOS, stand down contacts |
