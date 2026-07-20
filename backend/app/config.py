@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.3-70b-versatile"
     groq_api_url: str = "https://api.groq.com/openai/v1/chat/completions"
     llm_enabled: bool = True
+    # Testing aid: when true, the bot sends a small "🐛 [LLM debug]" chat
+    # message showing whether Groq was called for an unmatched message, the
+    # detected intent, or why the call was skipped/failed. Keep off in prod.
+    llm_debug: bool = False
     llm_timeout_seconds: float = 12.0
     llm_max_output_tokens: int = 500
     # Per-user inbound messages per hour before the LLM stops answering and

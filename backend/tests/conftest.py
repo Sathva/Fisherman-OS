@@ -5,6 +5,10 @@ os.environ.setdefault("WHATSAPP_PROVIDER", "console")
 os.environ.setdefault("WEATHER_PROVIDER", "synthetic")
 os.environ.setdefault("ENABLE_SCHEDULER", "false")
 os.environ.setdefault("ADMIN_API_KEY", "test-key")
+# Keep tests hermetic: a real key in backend/.env must never reach the tests
+# (env vars take precedence over the .env file in pydantic-settings).
+os.environ["GROQ_API_KEY"] = ""
+os.environ["LLM_DEBUG"] = "false"
 
 import pytest_asyncio  # noqa: E402
 

@@ -424,34 +424,54 @@ async def _build_llm_context(session: AsyncSession, user: User) -> str:
 async def _handle_llm_fallback(session: AsyncSession, user: User, command: str) -> list[str]:
     """Unmatched message from a registered user → single Groq call that either
     routes to an existing structured handler or answers/declines directly.
-    Any LLM failure degrades to the old static help reply — never silence."""
-    if not llm_service.is_configured() or await _llm_rate_limited(session, user):
-        return [await _reply(session, user, t("unknown_command", user.language), MessageType.HELP)]
+    Any LLM failure degrades to the old static help reply — never silence.
+
+    With LLM_DEBUG=true, a "🐛 [LLM debug]" chat message reports whether Groq
+    was called, the detected intent, or why the call was skipped/failed."""
+    settings = get_settings()
+    replies: list[str] = []
+
+    async def _debug_note(text: str) -> None:
+        if settings.llm_debug:
+            replies.append(await _reply(session, user, f"🐛 [LLM debug] {text}"))
+
+    if not llm_service.is_configured():
+        await _debug_note("Groq NOT called — LLM disabled or GROQ_API_KEY not set.")
+        replies.append(await _reply(session, user, t("unknown_command", user.language), MessageType.HELP))
+        return replies
+    if await _llm_rate_limited(session, user):
+        await _debug_note("Groq NOT called — per-user hourly rate limit reached.")
+        replies.append(await _reply(session, user, t("unknown_command", user.language), MessageType.HELP))
+        return replies
 
     context_block = await _build_llm_context(session, user)
     try:
         decision = await llm_service.classify_and_answer(user, command, context_block)
-    except LLMUnavailable:
-        return [await _reply(session, user, t("unknown_command", user.language), MessageType.HELP)]
+    except LLMUnavailable as exc:
+        await _debug_note(f"Groq call FAILED ({exc}) — sending static help fallback.")
+        replies.append(await _reply(session, user, t("unknown_command", user.language), MessageType.HELP))
+        return replies
+
+    await _debug_note(f'Groq called ({settings.groq_model}) — intent "{decision.intent}".')
 
     if decision.intent == "forecast":
-        return await _send_detailed_forecast(session, user)
+        return replies + await _send_detailed_forecast(session, user)
     if decision.intent == "prices":
-        return await _send_price_digest(session, user)
+        return replies + await _send_price_digest(session, user)
     if decision.intent == "help":
-        return [await _reply(session, user, t("help", user.language), MessageType.HELP)]
+        return replies + [await _reply(session, user, t("help", user.language), MessageType.HELP)]
     if decision.intent == "stop":
         user.subscribed = False
         await session.commit()
-        return [await _reply(session, user, t("stopped", user.language))]
+        return replies + [await _reply(session, user, t("stopped", user.language))]
     if decision.intent == "start":
         user.subscribed = True
         await session.commit()
-        return [await _reply(session, user, t("started", user.language))]
+        return replies + [await _reply(session, user, t("started", user.language))]
     if decision.intent == "language":
         user.onboarding_state = OnboardingState.AWAITING_LANGUAGE
         await session.commit()
-        return [await _reply(session, user, t("language_menu", user.language))]
+        return replies + [await _reply(session, user, t("language_menu", user.language))]
     if decision.intent == "emergency":
         # The LLM never triggers SOS itself — one tap on the button sends
         # "SOS", which goes through the exact same keyword path as typing it.
@@ -460,10 +480,10 @@ async def _handle_llm_fallback(session: AsyncSession, user: User, command: str) 
             session, phone=user.phone, text=text, user_id=user.id,
             message_type=MessageType.SOS, options=["SOS"],
         )
-        return [text]
+        return replies + [text]
 
     # "answer" and "off_topic": send the LLM's own (grounded or declining) text.
-    return [await _reply(session, user, decision.reply, MessageType.GENERIC)]
+    return replies + [await _reply(session, user, decision.reply, MessageType.GENERIC)]
 
 
 # --- Profile & agent commands -------------------------------------------------------

@@ -180,6 +180,67 @@ async def test_rate_limit_blocks_llm(db, wa, llm_on, monkeypatch):
     assert "HELP" in wa.sent[0][1]
 
 
+# --- LLM debug mode (testing aid) ----------------------------------------------
+
+
+@pytest.fixture
+def llm_debug_on(monkeypatch):
+    monkeypatch.setenv("LLM_DEBUG", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+async def test_debug_mode_reports_llm_call_and_intent(db, wa, llm_on, llm_debug_on, monkeypatch):
+    await register_user(db, wa, PHONE)
+    fake_llm(monkeypatch, "answer", "You can fish at 4pm, sea is calm.")
+    wa.sent.clear()
+
+    await handle_inbound(db, make_inbound(phone=PHONE, text="can i fish at 4pm?"))
+    assert len(wa.sent) == 2
+    assert "🐛 [LLM debug]" in wa.sent[0][1]
+    assert "Groq called" in wa.sent[0][1]
+    assert 'intent "answer"' in wa.sent[0][1]
+    assert wa.sent[1][1] == "You can fish at 4pm, sea is calm."
+
+
+async def test_debug_mode_reports_llm_not_configured(db, wa, monkeypatch):
+    await register_user(db, wa, PHONE)  # no GROQ_API_KEY set
+    monkeypatch.setenv("LLM_DEBUG", "true")
+    get_settings.cache_clear()
+    wa.sent.clear()
+
+    await handle_inbound(db, make_inbound(phone=PHONE, text="random question"))
+    get_settings.cache_clear()
+    assert len(wa.sent) == 2
+    assert "Groq NOT called" in wa.sent[0][1]
+    assert "HELP" in wa.sent[1][1]  # static fallback still sent
+
+
+async def test_debug_mode_reports_llm_failure(db, wa, llm_on, llm_debug_on, monkeypatch):
+    await register_user(db, wa, PHONE)
+
+    async def _boom(messages):
+        raise httpx.ConnectError("groq down")
+
+    monkeypatch.setattr(llm_service, "_post_chat", _boom)
+    wa.sent.clear()
+
+    await handle_inbound(db, make_inbound(phone=PHONE, text="kal paus padel ka?"))
+    assert len(wa.sent) == 2
+    assert "Groq call FAILED" in wa.sent[0][1]
+    assert "HELP" in wa.sent[1][1]
+
+
+async def test_debug_off_sends_no_debug_message(db, wa, llm_on, monkeypatch):
+    await register_user(db, wa, PHONE)
+    fake_llm(monkeypatch, "answer", "plain reply")
+    wa.sent.clear()
+
+    await handle_inbound(db, make_inbound(phone=PHONE, text="some odd question"))
+    assert wa.sent == [(PHONE, "plain reply")]  # default: no debug chatter
+
+
 # --- Village name spell-correction ---------------------------------------------
 
 
